@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TechAssets - Gestão de Ativos</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Font Awesome (Ícones) -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <!-- Contêiner para Notificações "Toast" -->
+    <div id="toast-container" class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 1100"></div>
+
+    <!-- Cabeçalho -->
+    <header class="tech-header">
+        <div class="container-fluid">
+            <nav class="navbar navbar-expand-lg">
+                <div class="navbar-brand tech-logo">
+                    <i class="fas fa-microchip"></i>
+                    <span>TechAssets</span>
+                </div>
+                
+                <div class="nav-links">
+                    <a href="#" class="nav-link active" id="nav-listar">
+                        <i class="fas fa-list"></i>
+                        <span>Listar Ativos</span>
+                    </a>
+                    <a href="#" class="nav-link" id="nav-cadastrar">
+                        <i class="fas fa-plus-circle"></i>
+                        <span>Cadastrar Ativo</span>
+                    </a>
+                </div>
+                
+                <div class="tech-status">
+                    <div class="status-indicator"></div>
+                    <span>Sistema Online</span>
+                </div>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Conteúdo Principal -->
+    <main class="main-content">
+        <div class="container-fluid">
+            <div id="app-root"></div>
+        </div>
+    </main>
+
+    <!-- Modal Genérico -->
+    <div class="modal fade tech-modal" id="modal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modal-title">Título</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="modal-body"></div>
+                <div class="modal-footer" id="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" id="modal-confirm">Confirmar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>
+
