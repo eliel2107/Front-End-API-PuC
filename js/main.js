@@ -1,74 +1,89 @@
 // Objeto Singleton para gerenciar as notificações "Toast"
 const toast = {
     container: document.getElementById('toast-container'),
-    
+
     show(message, type = 'info', duration = 5000) {
         const toastEl = document.createElement('div');
-        toastEl.className = `toast align-items-center text-white bg-${type === 'error' ? 'danger' : 'success'} border-0`;
+        toastEl.className = `toast align-items-center text-white border-0`;
         toastEl.setAttribute('role', 'alert');
         toastEl.setAttribute('aria-live', 'assertive');
         toastEl.setAttribute('aria-atomic', 'true');
-        
+
+        const bgClass = type === 'error' ? 'bg-danger' : 
+                       type === 'warning' ? 'bg-warning' : 
+                       type === 'success' ? 'bg-success' : 'bg-info';
+
+        toastEl.classList.add(bgClass);
+
         toastEl.innerHTML = `
             <div class="d-flex">
                 <div class="toast-body">
-                    <i class="fas fa-${type === 'error' ? 'exclamation-triangle' : 'check-circle'} me-2"></i>
+                    <i class="fas fa-${type === 'error' ? 'exclamation-triangle' : 
+                                     type === 'warning' ? 'exclamation-circle' :
+                                     type === 'success' ? 'check-circle' : 'info-circle'} me-2"></i>
                     ${message}
                 </div>
                 <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
             </div>
         `;
-        
-        this.container.appendChild(toastEl);
-        const bsToast = new bootstrap.Toast(toastEl, { delay: duration });
-        bsToast.show();
-        
-        toastEl.addEventListener('hidden.bs.toast', () => {
-            if (toastEl.parentNode) {
-                toastEl.parentNode.removeChild(toastEl);
-            }
-        });
+
+        if (this.container) {
+            this.container.appendChild(toastEl);
+            const bsToast = new bootstrap.Toast(toastEl, { delay: duration });
+            bsToast.show();
+
+            // Remove o elemento após ser fechado
+            toastEl.addEventListener('hidden.bs.toast', () => {
+                toastEl.remove();
+            });
+        }
     }
 };
 
-// Objeto Singleton para gerenciar modal
+// Objeto Singleton para gerenciar os modais de confirmação
 const modal = {
-    element: null,
+    element: document.getElementById('confirmModal'),
     bsModal: null,
     onConfirmCallback: null,
-    
+
     init() {
-        this.element = document.getElementById('modal');
-        this.bsModal = new bootstrap.Modal(this.element);
-        
-        // Botão confirmar
-        document.getElementById('modal-confirm').addEventListener('click', () => {
-            if (this.onConfirmCallback) {
-                this.onConfirmCallback();
+        if (this.element) {
+            this.bsModal = new bootstrap.Modal(this.element);
+
+            // Event listener para o botão de confirmação
+            const confirmBtn = document.getElementById('modal-confirm');
+            if (confirmBtn) {
+                confirmBtn.addEventListener('click', () => {
+                    if (this.onConfirmCallback) {
+                        this.onConfirmCallback();
+                        this.hide();
+                    }
+                });
             }
-        });
-    },
-    
-    show({ title, message = '', htmlContent = '', confirmText = 'Confirmar', cancelText = 'Cancelar', showCancel = true, onConfirm = null }) {
-        document.getElementById('modal-title').textContent = title;
-        
-        if (htmlContent) {
-            document.getElementById('modal-body').innerHTML = htmlContent;
-        } else {
-            document.getElementById('modal-body').innerHTML = `<p>${message}</p>`;
         }
-        
+    },
+
+    show(message, confirmText = 'Confirmar', onConfirm = null) {
+        if (!this.bsModal) return;
+
+        const messageEl = document.getElementById('modal-message');
         const confirmBtn = document.getElementById('modal-confirm');
-        confirmBtn.textContent = confirmText;
-        confirmBtn.style.display = onConfirm ? 'inline-block' : 'none';
-        
+
+        if (messageEl) messageEl.textContent = message;
+        if (confirmBtn) {
+            confirmBtn.textContent = confirmText;
+            confirmBtn.style.display = onConfirm ? 'inline-block' : 'none';
+        }
+
         this.onConfirmCallback = onConfirm;
         this.bsModal.show();
     },
-    
+
     hide() {
-        this.bsModal.hide();
-        this.onConfirmCallback = null;
+        if (this.bsModal) {
+            this.bsModal.hide();
+            this.onConfirmCallback = null;
+        }
     }
 };
 
@@ -77,341 +92,356 @@ const app = {
     root: document.getElementById('app-root'),
     navLinks: document.querySelectorAll('.nav-link'),
     allAssets: [], // Armazena a lista completa de ativos
-    uniqueValues: { types: [], statuses: [] },
-    currentFilters: {},
-    debounceTimer: null,
-
-    routes: {
-        'listar': renderFullListPage,
-        'cadastrar': showCreateFormPage
-    },
+    filteredAssets: [], // Armazena os ativos filtrados
+    currentRoute: 'dashboard',
+    editingAtivo: null,
+    debounceTimeout: null, // Para o filtro inteligente
+    maintenanceModal: null, // Para o modal de manutenção
 
     async init() {
-        modal.init();
-        this.navLinks.forEach(link => {
-            link.addEventListener('click', (e) => this.handleNavClick(e));
-        });
+        try {
+            // Inicializar componentes
+            modal.init();
+            
+            const maintenanceModalEl = document.getElementById('maintenanceModal');
+            if (maintenanceModalEl) {
+                this.maintenanceModal = new bootstrap.Modal(maintenanceModalEl);
+            }
 
-        this.root.addEventListener('click', (e) => this.handleDynamicClicks(e));
-        
-        await this.fetchAllAssets();
-        this.routes['listar']();
+            const maintenanceForm = document.getElementById('maintenance-form');
+            if (maintenanceForm) {
+                maintenanceForm.addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    await this.handleMaintenanceSubmit();
+                });
+            }
+
+            // Configurar navegação
+            this.setupNavigation();
+
+            // Carregar dados iniciais
+            await this.loadAssets();
+
+            // Mostrar dashboard por padrão
+            await this.showRoute('dashboard');
+            
+            // Ocultar loading
+            this.hideLoading();
+
+            // Adicionar partículas de fundo
+            this.createParticles();
+
+        } catch (error) {
+            console.error('Erro ao inicializar aplicação:', error);
+            toast.show('Erro ao inicializar a aplicação', 'error');
+            this.hideLoading();
+        }
     },
 
-    async fetchAllAssets() {
+    hideLoading() {
+        const loading = document.getElementById('loading-overlay');
+        if (loading) {
+            loading.classList.add('hidden');
+            setTimeout(() => loading.style.display = 'none', 500);
+        }
+    },
+
+    createParticles() {
+        const particlesContainer = document.getElementById('particles');
+        if (!particlesContainer) return;
+
+        // Criar partículas animadas
+        for (let i = 0; i < 150; i++) {
+            const particle = document.createElement('div');
+            particle.style.position = 'absolute';
+            particle.style.width = Math.random() * 4 + 1 + 'px';
+            particle.style.height = particle.style.width;
+            particle.style.background = '#00d4ff';
+            particle.style.borderRadius = '50%';
+            particle.style.left = Math.random() * 100 + '%';
+            particle.style.top = Math.random() * 100 + '%';
+            particle.style.opacity = Math.random() * 0.5 + 0.2;
+            particle.style.animation = `float ${Math.random() * 3 + 3}s infinite ease-in-out`;
+            particle.style.animationDelay = Math.random() * 2 + 's';
+
+            particlesContainer.appendChild(particle);
+        }
+    },
+
+    setupNavigation() {
+        // Adicionar event listeners aos links de navegação
+        document.addEventListener('click', (e) => {
+            const navLink = e.target.closest('[data-bs-target]');
+            if (navLink) {
+                e.preventDefault();
+                const route = navLink.getAttribute('data-bs-target');
+                this.showRoute(route);
+
+                // Atualizar estado ativo dos links
+                document.querySelectorAll('.nav-link').forEach(link => {
+                    link.classList.remove('active');
+                });
+                navLink.classList.add('active');
+            }
+        });
+    },
+    
+    // Configuração do filtro para ser "vivo" (live)
+    setupFilters() {
+        const applyDebouncedFilter = () => {
+            clearTimeout(this.debounceTimeout);
+            this.debounceTimeout = setTimeout(() => {
+                this.applyFilters();
+            }, 300); // Aguarda 300ms após o usuário parar de digitar
+        };
+
+        const filterNome = document.getElementById('filter-nome');
+        const filterTipo = document.getElementById('filter-tipo');
+        const filterStatus = document.getElementById('filter-status');
+
+        if (filterNome) {
+            filterNome.addEventListener('input', applyDebouncedFilter);
+        }
+        if (filterTipo) {
+            filterTipo.addEventListener('change', () => this.applyFilters());
+        }
+        if (filterStatus) {
+            filterStatus.addEventListener('change', () => this.applyFilters());
+        }
+    },
+
+    async loadAssets() {
         try {
             this.allAssets = await getAtivos();
-            this.uniqueValues.types = [...new Set(this.allAssets.map(a => a.tipo).filter(Boolean))];
-            this.uniqueValues.statuses = [...new Set(this.allAssets.map(a => a.status).filter(Boolean))];
+            this.filteredAssets = [...this.allAssets];
         } catch (error) {
-            console.error('Error fetching assets:', error);
-            toast.show("Falha ao buscar dados da API.", "error");
-            this.allAssets = []; // Garante que não quebre em caso de erro
+            console.error('Erro ao carregar ativos:', error);
+            toast.show('Erro ao carregar ativos', 'error');
+            this.allAssets = [];
+            this.filteredAssets = [];
         }
     },
 
-    handleNavClick(event) {
-        event.preventDefault();
-        const id = event.target.id.replace('nav-', '');
+    async showRoute(route) {
+        if (!this.root) return;
 
-        this.navLinks.forEach(link => link.classList.remove('active'));
-        event.target.classList.add('active');
+        this.currentRoute = route;
+        this.root.innerHTML = renderSpinner();
 
-        if (this.routes[id]) this.routes[id]();
+        // Usamos um pequeno timeout de 0 para garantir que o spinner renderize primeiro
+        setTimeout(async () => {
+            try {
+                let content = '';
+                switch (route) {
+                    case 'dashboard':
+                        content = renderDashboard(this.allAssets);
+                        break;
+                    case 'listar':
+                        content = renderFullListPage(this.filteredAssets);
+                        break;
+                    case 'cadastrar':
+                        content = showCreateFormPage(this.editingAtivo);
+                        break;
+                    default:
+                        content = renderDashboard(this.allAssets);
+                        break;
+                }
+
+                this.root.innerHTML = content;
+
+                // A lógica pós-renderização agora está mais simples e robusta
+                if (route === 'cadastrar') {
+                    this.setupForm();
+                } else if (route === 'listar') {
+                    this.setupFilters();
+                }
+
+            } catch (error) {
+                console.error('Erro ao renderizar rota:', error);
+                this.root.innerHTML = `
+                    <div class="text-center p-5">
+                        <i class="fas fa-exclamation-triangle fa-3x text-danger mb-3"></i>
+                        <h5 class="text-danger">Erro ao carregar página</h5>
+                        <p class="text-muted">Ocorreu um erro inesperado. Tente novamente.</p>
+                    </div>
+                `;
+            }
+        }, 0);
     },
 
-    handleDynamicClicks(event) {
-        const button = event.target.closest('button');
-        if (button) {
-            if (button.classList.contains('btn-delete')) handleDeleteAsset(button.dataset.tag);
-            if (button.classList.contains('btn-edit')) showUpdateFormPage(button.dataset.tag);
-            if (button.classList.contains('btn-add-maintenance')) handleShowAddMaintenanceForm(button.dataset.id, button.dataset.nome);
-            if (button.classList.contains('btn-delete-maintenance')) handleDeleteMaintenance(button.dataset.id);
-            if (button.classList.contains('btn-edit-maintenance')) handleShowUpdateMaintenanceForm(button.dataset.id, button.dataset.ativoId);
+    setupForm() {
+        const form = document.getElementById('ativo-form');
+        if (form) {
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                await this.handleFormSubmit();
+            });
         }
+    },
+
+    async handleFormSubmit() {
+        const formData = {
+            tag_patrimonio: document.getElementById('tag_patrimonio')?.value,
+            nome: document.getElementById('nome')?.value,
+            tipo: document.getElementById('tipo')?.value,
+            status: document.getElementById('status')?.value,
+            valor_aquisicao: parseFloat(document.getElementById('valor_aquisicao')?.value) || 0
+        };
+
+        try {
+            if (this.editingAtivo) {
+                await updateAtivo(this.editingAtivo.tag_patrimonio, formData);
+                toast.show('Ativo atualizado com sucesso!', 'success');
+            } else {
+                await createAtivo(formData);
+                toast.show('Ativo cadastrado com sucesso!', 'success');
+            }
+
+            await this.loadAssets();
+            this.editingAtivo = null;
+            this.showRoute('listar');
+
+        } catch (error) {
+            console.error('Erro ao salvar ativo:', error);
+            toast.show('Erro ao salvar ativo: ' + error.message, 'error');
+        }
+    },
+
+    async applyFilters() {
+        const filters = {
+            nome: document.getElementById('filter-nome')?.value || '',
+            tipo: document.getElementById('filter-tipo')?.value || '',
+            status: document.getElementById('filter-status')?.value || ''
+        };
+
+        try {
+            this.filteredAssets = await getAtivos(filters);
+
+            const ativosList = document.getElementById('ativos-list');
+            if (ativosList) {
+                ativosList.innerHTML = this.filteredAssets.length > 0 ? 
+                    renderAssetGrid(this.filteredAssets) : 
+                    renderEmptyState("Nenhum ativo encontrado com os filtros aplicados");
+            }
+
+        } catch (error) {
+            console.error('Erro ao aplicar filtros:', error);
+            toast.show('Erro ao aplicar filtros', 'error');
+        }
+    },
+
+    editAtivo(tag) {
+        const ativo = this.allAssets.find(a => a.tag_patrimonio === tag);
+        if (ativo) {
+            this.editingAtivo = ativo;
+            this.showRoute('cadastrar');
+        }
+    },
+
+    deleteAtivo(tag) {
+        const ativo = this.allAssets.find(a => a.tag_patrimonio === tag);
+        if (ativo) {
+            modal.show(
+                `Tem certeza que deseja excluir o ativo "${ativo.nome}"?`,
+                'Excluir',
+                async () => {
+                    try {
+                        await deleteAtivo(tag);
+                        toast.show('Ativo excluído com sucesso!', 'success');
+                        await this.loadAssets();
+                        
+                        if(this.currentRoute === 'listar'){
+                           await this.applyFilters();
+                        } else {
+                           this.showRoute(this.currentRoute);
+                        }
+                    } catch (error) {
+                        console.error('Erro ao excluir ativo:', error);
+                        toast.show('Erro ao excluir ativo: ' + error.message, 'error');
+                    }
+                }
+            );
+        }
+    },
+
+    showMaintenanceModal(ativoId) {
+        const ativo = this.allAssets.find(a => a.id === ativoId);
+        if (!ativo) {
+            toast.show('Ativo não encontrado.', 'error');
+            return;
+        }
+
+        const form = document.getElementById('maintenance-form');
+        form.reset();
+        document.getElementById('maintenance-ativo-id').value = ativo.id;
+        document.getElementById('maintenance-data').value = new Date().toISOString().split('T')[0];
+
+        this.maintenanceModal.show();
+    },
+
+    async handleMaintenanceSubmit() {
+        const ativoId = parseInt(document.getElementById('maintenance-ativo-id').value);
+        const descricao = document.getElementById('maintenance-descricao').value;
+        const data = document.getElementById('maintenance-data').value;
+
+        if (!ativoId || !descricao || !data) {
+            toast.show('Por favor, preencha todos os campos.', 'warning');
+            return;
+        }
+
+        const dadosManutencao = {
+            ativo_id: ativoId,
+            descricao: descricao,
+            data_manutencao: data
+        };
+
+        try {
+            await addManutencao(dadosManutencao);
+            toast.show('Manutenção adicionada com sucesso!', 'success');
+            this.maintenanceModal.hide();
+            await this.loadAssets();
+            
+            if (this.currentRoute === 'listar') {
+                await this.applyFilters();
+            }
+
+        } catch (error) {
+            console.error('Erro ao adicionar manutenção:', error);
+            toast.show('Erro ao adicionar manutenção: ' + error.message, 'error');
+        }
+    },
+
+    editMaintenance(id) {
+        toast.show('Funcionalidade de edição de manutenção em desenvolvimento', 'info');
+    },
+
+    deleteMaintenance(id) {
+        modal.show(
+            'Tem certeza que deseja excluir esta manutenção?',
+            'Excluir',
+            async () => {
+                try {
+                    await deleteManutencao(id);
+                    toast.show('Manutenção excluída com sucesso!', 'success');
+                    await this.loadAssets();
+                    if(this.currentRoute === 'listar'){
+                        await this.applyFilters();
+                    } else {
+                       this.showRoute(this.currentRoute);
+                    }
+                } catch (error) {
+                    console.error('Erro ao excluir manutenção:', error);
+                    toast.show('Erro ao excluir manutenção: ' + error.message, 'error');
+                }
+            }
+        );
     }
 };
 
-// --- FUNÇÃO UTILITÁRIA DEBOUNCE ---
-function debounce(func, delay = 300) {
-    return (...args) => {
-        clearTimeout(app.debounceTimer);
-        app.debounceTimer = setTimeout(() => {
-            func.apply(this, args);
-        }, delay);
-    };
-}
-
-// --- CONTROLADORES DE PÁGINA ---
-
-/**
- * Atualiza apenas a grade de ativos, preservando os filtros.
- */
-function updateAssetGrid() {
-    const gridContainer = document.getElementById('asset-grid-container');
-    if (!gridContainer) return;
-
-    let displayAssets = [...app.allAssets];
-
-    // Aplicar Filtros (localmente e de forma case-insensitive, usando 'includes')
-    const { nome, tipo, status } = app.currentFilters;
-    if (nome) {
-        const searchNome = nome.toLowerCase();
-        displayAssets = displayAssets.filter(a => a.nome.toLowerCase().includes(searchNome));
-    }
-    if (tipo) {
-        const searchTipo = tipo.toLowerCase();
-        displayAssets = displayAssets.filter(a => a.tipo && a.tipo.toLowerCase().includes(searchTipo));
-    }
-    if (status) {
-        const searchStatus = status.toLowerCase();
-        displayAssets = displayAssets.filter(a => a.status && a.status.toLowerCase().includes(searchStatus));
-    }
-
-    // Atualiza o conteúdo da grade
-    gridContainer.innerHTML = renderAssetGrid(displayAssets);
-}
-
-function renderFullListPage() {
-    // Renderiza a página "casca" com a barra de filtros
-    app.root.innerHTML = renderAssetListPage({
-        displayAssets: [], // Inicia com a grade vazia
-        filters: app.currentFilters,
-        uniqueValues: app.uniqueValues,
-    });
-
-    // Anexa os "escutadores" de eventos ao formulário de filtro
-    const filterForm = document.getElementById('filter-form');
-    if (filterForm) {
-        filterForm.addEventListener('input', debounce(handleFilterInput));
-        filterForm.addEventListener('reset', handleFilterReset);
-    }
-
-    // Popula a grade com os dados iniciais
-    updateAssetGrid();
-}
-
-function showCreateFormPage() {
-    app.root.innerHTML = renderFormPage({ title: 'Cadastrar Novo Ativo' });
-    document.getElementById('asset-form').addEventListener('submit', handleCreateAsset);
-}
-
-async function showUpdateFormPage(tag) {
-    const ativo = app.allAssets.find(a => a.tag_patrimonio === tag);
-    if (!ativo) {
-        toast.show("Ativo não encontrado para edição.", "error");
-        return;
-    }
-
-    app.root.innerHTML = renderFormPage({
-        title: 'Editar Ativo',
-        ativo: ativo,
-        isUpdate: true
-    });
-
-    document.getElementById('asset-form').addEventListener('submit', (e) => handleUpdateAsset(e, tag));
-}
-
-// --- HANDLERS ---
-
-function handleFilterInput() {
-    const nome = document.getElementById('filter-nome').value;
-    const tipo = document.getElementById('filter-tipo').value;
-    const status = document.getElementById('filter-status').value;
-
-    app.currentFilters = { nome, tipo, status };
-    updateAssetGrid(); // Apenas atualiza a grade, sem redesenhar a página inteira
-}
-
-function handleFilterReset() {
-    app.currentFilters = {};
-    const filterForm = document.getElementById('filter-form');
-    if (filterForm) filterForm.reset();
-    updateAssetGrid(); // Apenas atualiza a grade
-}
-
-async function handleCreateAsset(event) {
-    event.preventDefault();
-
-    const data = {
-        tag_patrimonio: document.getElementById('tag_patrimonio').value,
-        nome: document.getElementById('nome').value,
-        tipo: document.getElementById('tipo').value,
-        status: document.getElementById('status').value,
-        valor_aquisicao: parseFloat(document.getElementById('valor_aquisicao').value)
-    };
-
-    try {
-        await createAtivo(data);
-        toast.show('Ativo cadastrado com sucesso!', 'success');
-        await app.fetchAllAssets(); // Atualiza a lista principal
-        document.querySelector('#nav-listar').click();
-    } catch (error) {
-        toast.show(`Erro ao cadastrar: ${error.message}`, 'error');
-    }
-}
-
-async function handleUpdateAsset(event, tag) {
-    event.preventDefault();
-
-    const data = {
-        nome: document.getElementById('nome').value,
-        tipo: document.getElementById('tipo').value,
-        status: document.getElementById('status').value,
-        valor_aquisicao: parseFloat(document.getElementById('valor_aquisicao').value)
-    };
-
-    try {
-        await updateAtivo(tag, data);
-        toast.show('Ativo atualizado com sucesso!', 'success');
-        await app.fetchAllAssets();
-        document.querySelector('#nav-listar').click();
-    } catch (error) {
-        toast.show(`Erro ao atualizar: ${error.message}`, 'error');
-    }
-}
-
-function handleDeleteAsset(tag) {
-    modal.show({
-        title: 'Confirmar Exclusão',
-        message: `Deseja realmente excluir o ativo com a tag "${tag}"?`,
-        async onConfirm() {
-            try {
-                await deleteAtivo(tag);
-                toast.show('Ativo excluído com sucesso!', 'success');
-                await app.fetchAllAssets();
-                renderFullListPage();
-                modal.hide();
-            } catch (error) {
-                toast.show(`Erro ao excluir: ${error.message}`, 'error');
-            }
-        }
-    });
-}
-
-// --- HANDLERS DE MANUTENÇÃO ---
-
-function handleShowAddMaintenanceForm(ativoId, ativoNome) {
-    modal.show({
-        title: `Adicionar Manutenção para ${ativoNome}`,
-        htmlContent: `
-            <form id="maintenance-form">
-                <div class="mb-3">
-                    <label for="maintenance-description" class="form-label">Descrição da Manutenção</label>
-                    <textarea 
-                        class="form-control" 
-                        id="maintenance-description" 
-                        rows="3" 
-                        placeholder="Descreva a manutenção realizada..."
-                        required
-                    ></textarea>
-                </div>
-            </form>
-        `,
-        confirmText: 'Adicionar Manutenção',
-        onConfirm: () => handleAddMaintenance(ativoId)
-    });
-}
-
-async function handleAddMaintenance(ativoId) {
-    const description = document.getElementById('maintenance-description').value.trim();
-    
-    if (!description) {
-        toast.show('Descrição da manutenção é obrigatória.', 'error');
-        return;
-    }
-    
-    try {
-        await addManutencao({
-            ativo_id: parseInt(ativoId),
-            descricao: description
-        });
-        
-        toast.show('Manutenção adicionada com sucesso!', 'success');
-        await app.fetchAllAssets();
-        updateAssetGrid();
-        modal.hide();
-    } catch (error) {
-        toast.show(`Erro ao adicionar manutenção: ${error.message}`, 'error');
-    }
-}
-
-function handleShowUpdateMaintenanceForm(maintenanceId, ativoId) {
-    // Find the asset and maintenance
-    const ativo = app.allAssets.find(a => a.id == ativoId);
-    if (!ativo) {
-        toast.show('Ativo não encontrado.', 'error');
-        return;
-    }
-    
-    const manutencao = ativo.manutencoes.find(m => m.id == maintenanceId);
-    if (!manutencao) {
-        toast.show('Manutenção não encontrada.', 'error');
-        return;
-    }
-    
-    modal.show({
-        title: `Editar Manutenção`,
-        htmlContent: `
-            <form id="maintenance-form">
-                <div class="mb-3">
-                    <label for="maintenance-description" class="form-label">Descrição da Manutenção</label>
-                    <textarea 
-                        class="form-control" 
-                        id="maintenance-description" 
-                        rows="3" 
-                        placeholder="Descreva a manutenção realizada..."
-                        required
-                    >${manutencao.descricao}</textarea>
-                </div>
-            </form>
-        `,
-        confirmText: 'Atualizar Manutenção',
-        onConfirm: () => handleUpdateMaintenance(maintenanceId)
-    });
-}
-
-async function handleUpdateMaintenance(maintenanceId) {
-    const description = document.getElementById('maintenance-description').value.trim();
-    
-    if (!description) {
-        toast.show('Descrição da manutenção é obrigatória.', 'error');
-        return;
-    }
-    
-    try {
-        await updateManutencao(maintenanceId, {
-            descricao: description
-        });
-        
-        toast.show('Manutenção atualizada com sucesso!', 'success');
-        await app.fetchAllAssets();
-        updateAssetGrid();
-        modal.hide();
-    } catch (error) {
-        toast.show(`Erro ao atualizar manutenção: ${error.message}`, 'error');
-    }
-}
-
-function handleDeleteMaintenance(maintenanceId) {
-    modal.show({
-        title: 'Confirmar Exclusão',
-        message: 'Deseja realmente excluir esta manutenção?',
-        async onConfirm() {
-            try {
-                await deleteManutencao(maintenanceId);
-                toast.show('Manutenção excluída com sucesso!', 'success');
-                await app.fetchAllAssets();
-                updateAssetGrid();
-                modal.hide();
-            } catch (error) {
-                toast.show(`Erro ao excluir manutenção: ${error.message}`, 'error');
-            }
-        }
-    });
-}
-
-// --- INICIALIZAÇÃO ---
+// Inicializar aplicação quando DOM estiver pronto
 document.addEventListener('DOMContentLoaded', () => {
     app.init();
 });
+
+// Função global para compatibilidade
+window.app = app;

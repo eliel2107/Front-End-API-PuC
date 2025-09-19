@@ -1,9 +1,10 @@
 const API_URL = "http://127.0.0.1:5000";
 
 /**
- * Função genérica para tratar respostas da API.
+ * Função genérica para tratar respostas da API, convertendo para JSON e tratando erros.
  * @param {Response} response - O objeto de resposta do fetch.
- * @returns {Promise}
+ * @returns {Promise<any>} Os dados da resposta em JSON.
+ * @throws {Error} Lança um erro se a resposta não for bem-sucedida.
  */
 async function handleResponse(response) {
     const isJson = response.headers.get('content-type')?.includes('application/json');
@@ -20,7 +21,7 @@ async function handleResponse(response) {
 /**
  * Busca a lista de ativos na API, com filtros opcionais.
  * @param {object} filters - Objeto com os filtros (nome, tipo, status).
- * @returns {Promise} Uma promessa que resolve para a lista de ativos.
+ * @returns {Promise<Array>} Uma promessa que resolve para a lista de ativos.
  */
 async function getAtivos(filters = {}) {
     const params = new URLSearchParams();
@@ -33,7 +34,7 @@ async function getAtivos(filters = {}) {
 
     const response = await fetch(url);
     const data = await handleResponse(response);
-    return data.ativos || [];
+    return data.ativos || []; // Garante que sempre retorne um array
 }
 
 /**
@@ -111,3 +112,4 @@ async function deleteManutencao(id) {
     });
     return handleResponse(response);
 }
+

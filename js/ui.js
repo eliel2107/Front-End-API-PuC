@@ -4,75 +4,159 @@
  */
 function renderSpinner() {
     return `
-        <div class="loading">
-            <div class="spinner"></div>
-            <p class="mt-3">Carregando...</p>
+        <div class="d-flex justify-content-center align-items-center p-5">
+            <div class="spinner-ring me-3"></div>
+            <span class="text-info">Carregando...</span>
         </div>
     `;
 }
 
 /**
- * Renderiza a página de listagem de ativos com filtros e grades.
- * @param {object} options - Opções contendo displayAssets, filters e uniqueValues.
- * @returns {string} HTML da página de listagem.
+ * Renderiza uma mensagem quando não há dados para exibir.
+ * @param {string} message - Mensagem a ser exibida.
+ * @returns {string} HTML da mensagem.
  */
-function renderAssetListPage({ displayAssets = [], filters = {}, uniqueValues = {} }) {
+function renderEmptyState(message = "Nenhum item encontrado") {
     return `
-        <div class="row">
-            <!-- Filtros -->
-            <div class="col-12 mb-4">
-                <div class="filters-section">
-                    <h4 class="filters-title">
-                        <i class="fas fa-filter"></i>
-                        Filtros de Busca
-                    </h4>
-                    <form id="filter-form">
-                        <div class="row">
-                            <div class="col-md-4 mb-3">
-                                <label for="filter-nome" class="form-label">Nome</label>
-                                <input 
-                                    type="text" 
-                                    class="form-control" 
-                                    id="filter-nome" 
-                                    placeholder="Buscar por nome..."
-                                    value="${filters.nome || ''}"
-                                >
-                            </div>
-                            <div class="col-md-3 mb-3">
-                                <label for="filter-tipo" class="form-label">Tipo</label>
-                                <input 
-                                    type="text" 
-                                    class="form-control" 
-                                    id="filter-tipo" 
-                                    placeholder="Filtrar por tipo..."
-                                    value="${filters.tipo || ''}"
-                                >
-                            </div>
-                            <div class="col-md-3 mb-3">
-                                <label for="filter-status" class="form-label">Status</label>
-                                <input 
-                                    type="text" 
-                                    class="form-control" 
-                                    id="filter-status" 
-                                    placeholder="Filtrar por status..."
-                                    value="${filters.status || ''}"
-                                >
-                            </div>
-                            <div class="col-md-2 mb-3 d-flex align-items-end">
-                                <button type="reset" class="btn btn-secondary w-100">
-                                    <i class="fas fa-times"></i>
-                                    Limpar
-                                </button>
-                            </div>
-                        </div>
-                    </form>
+        <div class="text-center p-5">
+            <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+            <h5 class="text-muted">${message}</h5>
+            <p class="text-muted">Não há dados disponíveis no momento.</p>
+        </div>
+    `;
+}
+
+/**
+ * Renderiza um painel com barras de progresso para a distribuição de ativos por tipo.
+ * @param {Array} ativos - A lista de ativos.
+ * @returns {string} O HTML do painel de distribuição.
+ */
+function renderTypeDistribution(ativos) {
+    if (!ativos || ativos.length === 0) {
+        return '<p class="text-muted text-center py-5">Sem dados para exibir a distribuição.</p>';
+    }
+
+    const tiposCount = {};
+    ativos.forEach(ativo => {
+        const tipo = ativo.tipo || 'Não informado';
+        tiposCount[tipo] = (tiposCount[tipo] || 0) + 1;
+    });
+
+    const totalAtivos = ativos.length;
+
+    // Converte o objeto em um array para ordenar do maior para o menor
+    const sortedTipos = Object.entries(tiposCount).sort(([, a], [, b]) => b - a);
+
+    let html = '<div class="distribution-list">';
+
+    sortedTipos.forEach(([tipo, count]) => {
+        const percentage = ((count / totalAtivos) * 100).toFixed(1);
+        html += `
+            <div class="distribution-item mb-3">
+                <div class="d-flex justify-content-between mb-1">
+                    <span class="distribution-label">${tipo}</span>
+                    <span class="distribution-value">${count} (${percentage}%)</span>
+                </div>
+                <div class="progress" style="height: 10px;">
+                    <div class="progress-bar" 
+                         role="progressbar" 
+                         style="width: ${percentage}%; background: linear-gradient(90deg, var(--primary-tech), var(--secondary-tech));" 
+                         aria-valuenow="${percentage}" 
+                         aria-valuemin="0" 
+                         aria-valuemax="100">
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+
+    html += '</div>';
+    return html;
+}
+
+/**
+ * Renderiza a página do dashboard com estatísticas e gráficos.
+ * @param {Array} ativos - Lista de ativos.
+ * @returns {string} HTML do dashboard.
+ */
+function renderDashboard(ativos = []) {
+    const stats = calculateStats(ativos);
+    const recentActivities = getRecentActivities(ativos);
+
+    return `
+        <div class="dashboard fade-in">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2 class="glow-text mb-0">
+                    <i class="fas fa-chart-pie me-2"></i>
+                    Dashboard
+                </h2>
+                <small class="text-muted">Última atualização: ${new Date().toLocaleString('pt-BR')}</small>
+            </div>
+
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-card-header">
+                        <i class="fas fa-cubes stat-card-icon"></i>
+                        <h6 class="stat-card-title">Total de Ativos</h6>
+                    </div>
+                    <div class="stat-card-value">${stats.total}</div>
+                </div>
+
+                <div class="stat-card success">
+                    <div class="stat-card-header">
+                        <i class="fas fa-check-circle stat-card-icon"></i>
+                        <h6 class="stat-card-title">Ativos Ativos</h6>
+                    </div>
+                    <div class="stat-card-value">${stats.ativo}</div>
+                </div>
+
+                <div class="stat-card warning">
+                    <div class="stat-card-header">
+                        <i class="fas fa-tools stat-card-icon"></i>
+                        <h6 class="stat-card-title">Ativos em Manutenção</h6>
+                    </div>
+                    <div class="stat-card-value">${stats.manutencao}</div>
+                    <div class="stat-card-subtitle">
+                        Total de ${stats.totalManutencoes} registros
+                    </div>
+                </div>
+
+                <div class="stat-card danger">
+                    <div class="stat-card-header">
+                        <i class="fas fa-times-circle stat-card-icon"></i>
+                        <h6 class="stat-card-title">Inativos</h6>
+                    </div>
+                    <div class="stat-card-value">${stats.inativo}</div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-card-header">
+                        <i class="fas fa-dollar-sign stat-card-icon"></i>
+                        <h6 class="stat-card-title">Valor Total</h6>
+                    </div>
+                    <div class="stat-card-value">R$ ${stats.valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
                 </div>
             </div>
 
-            <!-- Grade de Ativos -->
-            <div class="col-12">
-                <div id="asset-grid-container">
-                    ${renderAssetGrid(displayAssets)}
+            <div class="row mt-4">
+                <div class="col-lg-8">
+                    <div class="chart-container">
+                        <h4 class="chart-title">
+                            <i class="fas fa-tasks me-2"></i>
+                            Distribuição por Tipo
+                        </h4>
+                        ${renderTypeDistribution(ativos)}
+                    </div>
+                </div>
+
+                <div class="col-lg-4">
+                    <div class="recent-activities">
+                        <h4 class="chart-title mb-3">
+                            <i class="fas fa-clock me-2"></i>
+                            Atividades Recentes
+                        </h4>
+                        ${renderRecentActivities(recentActivities)}
+                    </div>
                 </div>
             </div>
         </div>
@@ -80,147 +164,334 @@ function renderAssetListPage({ displayAssets = [], filters = {}, uniqueValues = 
 }
 
 /**
- * Renderiza uma grade de cards de ativos.
- * @param {Array} displayAssets - Array de ativos a serem exibidos.
- * @returns {string} HTML da grade de ativos.
+ * Calcula estatísticas dos ativos.
+ * @param {Array} ativos - Lista de ativos.
+ * @returns {Object} Objeto com estatísticas.
  */
-function renderAssetGrid(displayAssets) {
-    if (!displayAssets || displayAssets.length === 0) {
+function calculateStats(ativos) {
+    const stats = {
+        total: ativos.length,
+        ativo: 0,
+        inativo: 0,
+        manutencao: 0,
+        valorTotal: 0,
+        totalManutencoes: 0
+    };
+
+    ativos.forEach(ativo => {
+        stats.valorTotal += ativo.valor_aquisicao || 0;
+        stats.totalManutencoes += ativo.manutencoes ? ativo.manutencoes.length : 0;
+
+        switch (ativo.status) {
+            case 'Ativo':
+                stats.ativo++;
+                break;
+            case 'Inativo':
+                stats.inativo++;
+                break;
+            case 'Em Manutenção':
+                stats.manutencao++;
+                break;
+        }
+    });
+
+    return stats;
+}
+
+/**
+ * Obtem atividades recentes baseadas nas manutenções.
+ * @param {Array} ativos - Lista de ativos.
+ * @returns {Array} Lista de atividades recentes.
+ */
+function getRecentActivities(ativos) {
+    const activities = [];
+
+    ativos.forEach(ativo => {
+        if (ativo.manutencoes && ativo.manutencoes.length > 0) {
+            ativo.manutencoes.forEach(manutencao => {
+                activities.push({
+                    type: 'maintenance',
+                    title: `${ativo.nome}`,
+                    description: manutencao.descricao,
+                    date: manutencao.data_manutencao,
+                    ativo: ativo
+                });
+            });
+        }
+    });
+
+    // Ordenar por data mais recente
+    activities.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    return activities.slice(0, 5); // Retorna apenas as 5 mais recentes
+}
+
+/**
+ * Renderiza a lista de atividades recentes.
+ * @param {Array} activities - Lista de atividades.
+ * @returns {string} HTML das atividades.
+ */
+function renderRecentActivities(activities) {
+    if (activities.length === 0) {
         return `
-            <div class="empty-state">
-                <i class="fas fa-box-open"></i>
-                <h3>Nenhum ativo encontrado</h3>
-                <p>Não há ativos cadastrados ou que correspondam aos filtros aplicados.</p>
+            <div class="text-center p-3">
+                <i class="fas fa-history fa-2x text-muted mb-2"></i>
+                <p class="text-muted mb-0">Nenhuma atividade recente</p>
             </div>
         `;
     }
 
+    return activities.map(activity => `
+        <div class="activity-item">
+            <div class="activity-icon">
+                <i class="fas fa-tools"></i>
+            </div>
+            <div class="activity-content">
+                <div class="activity-title">${activity.title}</div>
+                <div class="activity-description">${activity.description}</div>
+                <div class="activity-time">${formatDate(activity.date)}</div>
+            </div>
+        </div>
+    `).join('');
+}
+
+/**
+ * Renderiza a página completa de listagem de ativos.
+ * @param {Array} ativos - Lista de ativos para exibir.
+ * @returns {string} HTML da página de listagem.
+ */
+function renderFullListPage(ativos = []) {
+    return `
+        <div class="fade-in">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2 class="glow-text mb-0">
+                    <i class="fas fa-list me-2"></i>
+                    Gerenciar Ativos
+                </h2>
+                <div>
+                    <button class="btn btn-outline-primary glow-hover" onclick="app.showRoute('cadastrar')">
+                        <i class="fas fa-plus me-2"></i>
+                        Novo Ativo
+                    </button>
+                </div>
+            </div>
+
+            ${renderFilters()}
+
+            <div id="ativos-list">
+                ${ativos.length > 0 ? renderAssetGrid(ativos) : renderEmptyState("Nenhum ativo encontrado")}
+            </div>
+        </div>
+    `;
+}
+
+/**
+ * Renderiza os filtros de busca.
+ * @returns {string} HTML dos filtros.
+ */
+function renderFilters() {
+    return `
+        <div class="filters-container mb-4">
+            <h5 class="filters-title">
+                <i class="fas fa-filter me-2"></i>
+                Filtros
+            </h5>
+            <div class="row g-3">
+                <div class="col-md-5">
+                    <label class="form-label">Nome do Ativo</label>
+                    <input type="text" class="form-control" id="filter-nome" placeholder="Digite para buscar...">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Tipo</label>
+                    <select class="form-control" id="filter-tipo">
+                        <option value="">Todos os tipos</option>
+                        <option value="Notebook">Notebook</option>
+                        <option value="Desktop">Desktop</option>
+                        <option value="Monitor">Monitor</option>
+                        <option value="Impressora">Impressora</option>
+                        <option value="Tablet">Tablet</option>
+                        <option value="Smartphone">Smartphone</option>
+                        <option value="Servidor">Servidor</option>
+                        <option value="Outro">Outro</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Status</label>
+                    <select class="form-control" id="filter-status">
+                        <option value="">Todos os status</option>
+                        <option value="Ativo">Ativo</option>
+                        <option value="Inativo">Inativo</option>
+                        <option value="Em Manutenção">Em Manutenção</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+/**
+ * Renderiza um grid de cards de ativos.
+ * @param {Array} ativos - Lista de ativos.
+ * @returns {string} HTML do grid de ativos.
+ */
+function renderAssetGrid(ativos) {
     return `
         <div class="asset-grid">
-            ${displayAssets.map(ativo => renderAssetCard(ativo)).join('')}
+            ${ativos.map(ativo => renderAssetCard(ativo)).join('')}
         </div>
     `;
 }
 
 /**
  * Renderiza um card individual de ativo.
- * @param {object} ativo - O objeto ativo.
+ * @param {Object} ativo - Objeto do ativo.
  * @returns {string} HTML do card do ativo.
  */
 function renderAssetCard(ativo) {
-    const statusClass = getStatusClass(ativo.status);
-    const maintenanceHtml = renderMaintenanceSection(ativo);
-    
     return `
-        <div class="asset-card">
-            <div class="asset-card-header">
-                <h5 class="asset-name">${ativo.nome || 'Nome não informado'}</h5>
-                <span class="asset-tag">${ativo.tag_patrimonio}</span>
-            </div>
-            
-            <div class="asset-info">
-                <p><strong>Tipo:</strong> ${ativo.tipo || 'Não informado'}</p>
-                <p><strong>Status:</strong> <span class="status-badge ${statusClass}">${ativo.status || 'Não informado'}</span></p>
-                <p><strong>Valor:</strong> <span class="asset-value">R$ ${ativo.valor_aquisicao ? ativo.valor_aquisicao.toFixed(2).replace('.', ',') : '0,00'}</span></p>
+        <div class="asset-card" data-ativo-id="${ativo.id}">
+            <div class="asset-header">
+                <div class="asset-tag">${ativo.tag_patrimonio}</div>
+                <div class="asset-actions">
+                    <button class="btn btn-sm btn-warning glow-hover" onclick="app.editAtivo('${ativo.tag_patrimonio}')" title="Editar">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="btn btn-sm btn-danger glow-hover" onclick="app.deleteAtivo('${ativo.tag_patrimonio}')" title="Excluir">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
             </div>
 
-            ${maintenanceHtml}
+            <h5 class="asset-title">${ativo.nome}</h5>
 
-            <div class="asset-actions">
-                <button class="btn btn-warning btn-sm btn-edit" data-tag="${ativo.tag_patrimonio}">
-                    <i class="fas fa-edit"></i> Editar
-                </button>
-                <button class="btn btn-danger btn-sm btn-delete" data-tag="${ativo.tag_patrimonio}">
-                    <i class="fas fa-trash"></i> Excluir
-                </button>
-                <button class="btn btn-success btn-sm btn-add-maintenance" data-id="${ativo.id}" data-nome="${ativo.nome}">
-                    <i class="fas fa-tools"></i> Nova Manutenção
-                </button>
+            <div class="asset-details">
+                <div class="asset-detail-item">
+                    <span class="asset-detail-label">Tipo:</span>
+                    <span class="asset-detail-value">${ativo.tipo || 'Não informado'}</span>
+                </div>
+                <div class="asset-detail-item">
+                    <span class="asset-detail-label">Status:</span>
+                    <span class="status-badge status-${ativo.status.toLowerCase().replace(/ /g, '-').replace(/ç/g, 'c').replace(/ã/g, 'a')}">${ativo.status}</span>
+                </div>
+                <div class="asset-detail-item">
+                    <span class="asset-detail-label">Valor:</span>
+                    <span class="asset-detail-value">R$ ${(ativo.valor_aquisicao || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                </div>
+                <div class="asset-detail-item">
+                    <span class="asset-detail-label">Manutenções:</span>
+                    <span class="asset-detail-value">${ativo.manutencoes ? ativo.manutencoes.length : 0}</span>
+                </div>
             </div>
+
+            ${renderMaintenanceSection(ativo)}
         </div>
     `;
 }
 
 /**
  * Renderiza a seção de manutenções de um ativo.
- * @param {object} ativo - O objeto ativo com suas manutenções.
+ * @param {Object} ativo - Objeto doativo.
  * @returns {string} HTML da seção de manutenções.
  */
 function renderMaintenanceSection(ativo) {
-    if (!ativo.manutencoes || ativo.manutencoes.length === 0) {
-        return `
-            <div class="maintenance-section">
-                <h6 class="maintenance-title">
-                    <i class="fas fa-tools"></i>
-                    Manutenções (0)
-                </h6>
-                <p class="text-muted"><em>Nenhuma manutenção registrada</em></p>
-            </div>
-        `;
-    }
+    const manutencoes = ativo.manutencoes || [];
 
     return `
-        <div class="maintenance-section">
-            <h6 class="maintenance-title">
-                <i class="fas fa-tools"></i>
-                Manutenções (${ativo.manutencoes.length})
-            </h6>
-            <div class="maintenance-list">
-                ${ativo.manutencoes.map(manutencao => `
-                    <div class="maintenance-item">
-                        <div class="maintenance-description">${manutencao.descricao}</div>
-                        <div class="maintenance-actions">
-                            <button class="btn btn-sm btn-warning btn-edit-maintenance" 
-                                    data-id="${manutencao.id}" 
-                                    data-ativo-id="${ativo.id}">
-                                <i class="fas fa-edit"></i>
-                            </button>
-                            <button class="btn btn-sm btn-danger btn-delete-maintenance" 
-                                    data-id="${manutencao.id}">
-                                <i class="fas fa-trash"></i>
-                            </button>
-                        </div>
-                    </div>
-                `).join('')}
+        <div class="maintenance-section mt-3">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h6 class="text-secondary mb-0">
+                    <i class="fas fa-tools me-1"></i>
+                    Manutenções (${manutencoes.length})
+                </h6>
+                <button class="btn btn-sm btn-outline-primary" onclick="app.showMaintenanceModal(${ativo.id})" title="Adicionar Manutenção">
+                    <i class="fas fa-plus"></i>
+                </button>
             </div>
+
+            ${manutencoes.length > 0 ? 
+                `<div class="maintenance-list">
+                    ${manutencoes.map(manutencao => `
+                        <div class="maintenance-item p-2 border-bottom">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div class="flex-grow-1">
+                                    <small class="text-info">${formatDate(manutencao.data_manutencao)}</small>
+                                    <p class="mb-0 text-light">${manutencao.descricao}</p>
+                                </div>
+                                <div class="maintenance-actions">
+                                    <button class="btn btn-sm btn-outline-warning" onclick="app.editMaintenance(${manutencao.id})" title="Editar">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-danger" onclick="app.deleteMaintenance(${manutencao.id})" title="Excluir">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>` : 
+                '<p class="text-muted text-center py-2"><em>Nenhuma manutenção registrada</em></p>'
+            }
         </div>
     `;
 }
 
 /**
- * Renderiza a página de formulário (criar/editar).
- * @param {object} options - Opções contendo title, ativo e isUpdate.
- * @returns {string} HTML da página do formulário.
+ * Renderiza a página de cadastro/edição de ativo.
+ * @param {Object|null} ativo - Ativo para editar (null para novo cadastro).
+ * @returns {string} HTML do formulário.
  */
-function renderFormPage({ title, ativo = null, isUpdate = false }) {
+function showCreateFormPage(ativo = null) {
+    const isEditing = ativo !== null;
+    const title = isEditing ? 'Editar Ativo' : 'Cadastrar Novo Ativo';
+    const buttonText = isEditing ? 'Atualizar Ativo' : 'Cadastrar Ativo';
+
     return `
-        <div class="row justify-content-center">
-            <div class="col-lg-8">
-                <div class="form-section">
-                    <h2 class="form-title">${title}</h2>
-                    
-                    <form id="asset-form">
-                        ${!isUpdate ? `
-                        <div class="mb-3">
-                            <label for="tag_patrimonio" class="form-label">Tag Patrimônio *</label>
-                            <input type="text" class="form-control" id="tag_patrimonio" required 
-                                   value="${ativo?.tag_patrimonio || ''}" placeholder="Ex: COMP001">
+        <div class="fade-in">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2 class="glow-text mb-0">
+                    <i class="fas fa-${isEditing ? 'edit' : 'plus'} me-2"></i>
+                    ${title}
+                </h2>
+                <button class="btn btn-outline-secondary glow-hover" onclick="app.showRoute('listar')">
+                    <i class="fas fa-arrow-left me-2"></i>
+                    Voltar
+                </button>
+            </div>
+
+            <div class="form-container">
+                <form id="ativo-form">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="tag_patrimonio" class="form-label">Tag de Patrimônio *</label>
+                            <input type="text" class="form-control" id="tag_patrimonio" 
+                                   value="${ativo?.tag_patrimonio || ''}" 
+                                   ${isEditing ? 'readonly' : ''} required>
                         </div>
-                        ` : ''}
-                        
-                        <div class="mb-3">
-                            <label for="nome" class="form-label">Nome *</label>
-                            <input type="text" class="form-control" id="nome" required 
-                                   value="${ativo?.nome || ''}" placeholder="Nome do ativo">
+
+                        <div class="col-md-6 mb-3">
+                            <label for="nome" class="form-label">Nome do Ativo *</label>
+                            <input type="text" class="form-control" id="nome" 
+                                   value="${ativo?.nome || ''}" required>
                         </div>
-                        
-                        <div class="mb-3">
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
                             <label for="tipo" class="form-label">Tipo *</label>
-                            <input type="text" class="form-control" id="tipo" required 
-                                   value="${ativo?.tipo || ''}" placeholder="Tipo do ativo">
+                            <select class="form-control" id="tipo" required>
+                                <option value="">Selecione o tipo</option>
+                                <option value="Notebook" ${ativo?.tipo === 'Notebook' ? 'selected' : ''}>Notebook</option>
+                                <option value="Desktop" ${ativo?.tipo === 'Desktop' ? 'selected' : ''}>Desktop</option>
+                                <option value="Monitor" ${ativo?.tipo === 'Monitor' ? 'selected' : ''}>Monitor</option>
+                                <option value="Impressora" ${ativo?.tipo === 'Impressora' ? 'selected' : ''}>Impressora</option>
+                                <option value="Tablet" ${ativo?.tipo === 'Tablet' ? 'selected' : ''}>Tablet</option>
+                                <option value="Smartphone" ${ativo?.tipo === 'Smartphone' ? 'selected' : ''}>Smartphone</option>
+                                <option value="Servidor" ${ativo?.tipo === 'Servidor' ? 'selected' : ''}>Servidor</option>
+                                <option value="Outro" ${ativo?.tipo === 'Outro' ? 'selected' : ''}>Outro</option>
+                            </select>
                         </div>
-                        
-                        <div class="mb-3">
+
+                        <div class="col-md-6 mb-3">
                             <label for="status" class="form-label">Status *</label>
                             <select class="form-control" id="status" required>
                                 <option value="">Selecione o status</option>
@@ -229,40 +500,42 @@ function renderFormPage({ title, ativo = null, isUpdate = false }) {
                                 <option value="Em Manutenção" ${ativo?.status === 'Em Manutenção' ? 'selected' : ''}>Em Manutenção</option>
                             </select>
                         </div>
-                        
-                        <div class="mb-4">
-                            <label for="valor_aquisicao" class="form-label">Valor de Aquisição *</label>
-                            <input type="number" step="0.01" class="form-control" id="valor_aquisicao" required 
-                                   value="${ativo?.valor_aquisicao || ''}" placeholder="0.00">
-                        </div>
-                        
-                        <div class="d-flex gap-2">
-                            <button type="submit" class="btn btn-primary">
-                                <i class="fas fa-save"></i>
-                                ${isUpdate ? 'Atualizar' : 'Cadastrar'}
-                            </button>
-                            <button type="button" class="btn btn-secondary" id="nav-listar">
-                                <i class="fas fa-arrow-left"></i>
-                                Voltar
-                            </button>
-                        </div>
-                    </form>
-                </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="valor_aquisicao" class="form-label">Valor de Aquisição</label>
+                        <input type="number" class="form-control" id="valor_aquisicao" 
+                               step="0.01" min="0" value="${ativo?.valor_aquisicao || ''}">
+                    </div>
+
+                    <div class="text-center">
+                        <button type="button" class="btn btn-secondary me-2 glow-hover" onclick="app.showRoute('listar')">
+                            <i class="fas fa-times me-2"></i>
+                            Cancelar
+                        </button>
+                        <button type="submit" class="btn btn-primary glow-hover">
+                            <i class="fas fa-save me-2"></i>
+                            ${buttonText}
+                        </button>
+                    </div>
+                </form>
             </div>
         </div>
     `;
 }
 
 /**
- * Retorna a classe CSS apropriada para o status.
- * @param {string} status - O status do ativo.
- * @returns {string} A classe CSS.
+ * Formata uma data para exibição.
+ * @param {string} dateString - String da data.
+ * @returns {string} Data formatada.
  */
-function getStatusClass(status) {
-    switch (status?.toLowerCase()) {
-        case 'ativo': return 'status-ativo';
-        case 'em manutenção': return 'status-manutencao';
-        case 'inativo': return 'status-inativo';
-        default: return 'status-inativo';
+function formatDate(dateString) {
+    try {
+        const date = new Date(dateString);
+        // Adiciona o fuso horário para corrigir a data que vem como UTC
+        const userTimezoneOffset = date.getTimezoneOffset() * 60000;
+        return new Date(date.getTime() + userTimezoneOffset).toLocaleDateString('pt-BR');
+    } catch {
+        return dateString;
     }
 }
